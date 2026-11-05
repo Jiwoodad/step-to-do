@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>StepTodo</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="config.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1 class="app-title">✅ StepTodo</h1>
+      <span id="mock-badge" class="badge badge-muted" hidden title="브라우저에만 저장되는 가짜 API를 사용 중입니다">Mock API</span>
+      <div id="user-bar" class="user-bar" hidden>
+        <span class="visually-hidden">로그인한 사용자</span>
+        <span id="user-email" class="user-email"></span>
+        <button type="button" id="logout-button" class="btn btn-ghost btn-sm">로그아웃</button>
+      </div>
+    </header>
+
+    <!-- 새로고침 후 로그인 상태 확인 중 -->
+    <section id="boot-view" class="card boot-card" aria-live="polite">
+      <p id="boot-message" class="boot-message">로그인 상태를 확인하는 중…</p>
+      <div id="boot-actions" class="boot-actions" hidden>
+        <button type="button" id="boot-retry" class="btn btn-sm">다시 시도</button>
+        <button type="button" id="boot-relogin" class="btn btn-ghost btn-sm">다시 로그인하기</button>
+      </div>
+    </section>
+
+    <!-- 로그인 / 회원가입 -->
+    <section id="auth-view" class="card auth-card" aria-labelledby="auth-heading" hidden>
+      <h2 id="auth-heading" class="auth-title">로그인</h2>
+      <p id="auth-notice" class="auth-notice" role="status" hidden></p>
+
+      <form id="login-form" class="todo-form" novalidate>
+        <div class="field">
+          <label for="login-email">이메일</label>
+          <input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" spellcheck="false" required>
+          <p class="field-error" data-error-for="email" hidden></p>
+        </div>
+        <div class="field">
+          <label for="login-password">비밀번호</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          <p class="field-error" data-error-for="password" hidden></p>
+        </div>
+        <p class="form-error" data-form-error role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block" data-busy-label="로그인 중…">로그인</button>
+        <p class="auth-switch">계정이 없나요? <button type="button" class="link-button" data-auth-mode="signup">회원가입</button></p>
+      </form>
+
+      <form id="signup-form" class="todo-form" novalidate hidden>
+        <div class="field">
+          <label for="signup-email">이메일</label>
+          <div class="input-row">
+            <input id="signup-email" name="email" type="email" autocomplete="email" inputmode="email" spellcheck="false" required>
+            <button type="button" id="email-code-send" class="btn btn-sm">인증코드 받기</button>
+          </div>
+          <p class="field-error" data-error-for="email" hidden></p>
+          <p id="email-verified" class="field-success" role="status" hidden>
+            이메일 인증을 완료했어요. <button type="button" id="email-change" class="link-button">이메일 변경</button>
+          </p>
+        </div>
+        <div id="email-code-field" class="field" hidden>
+          <div class="field-label-row">
+            <label for="signup-code">인증코드</label>
+            <span id="email-code-timer" class="counter" role="timer"></span>
+          </div>
+          <div class="input-row">
+            <input id="signup-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="signup-code-hint">
+            <button type="button" id="email-code-verify" class="btn btn-sm">확인</button>
+          </div>
+          <p id="signup-code-hint" class="field-hint">메일로 받은 숫자 6자리를 입력해 주세요.</p>
+          <p class="field-error" data-error-for="code" hidden></p>
+        </div>
+        <div class="field">
+          <label for="signup-password">비밀번호</label>
+          <input id="signup-password" name="password" type="password" autocomplete="new-password" aria-describedby="signup-password-hint" required>
+          <p id="signup-password-hint" class="field-hint">8~64자. 공백도 글자로 셉니다.</p>
+          <p class="field-error" data-error-for="password" hidden></p>
+        </div>
+        <div class="field">
+          <label for="signup-password-confirm">비밀번호 확인</label>
+          <input id="signup-password-confirm" name="password_confirm" type="password" autocomplete="new-password" required>
+          <p class="field-error" data-error-for="password_confirm" hidden></p>
+        </div>
+        <p class="form-error" data-form-error role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block" data-busy-label="가입 중…">가입하기</button>
+        <p class="auth-switch">이미 계정이 있나요? <button type="button" class="link-button" data-auth-mode="login">로그인</button></p>
+      </form>
+
+      <p id="mock-mailbox" class="auth-hint" role="status" hidden></p>
+      <p id="mock-accounts" class="auth-hint" hidden></p>
+    </section>
+
+    <!-- 할 일 화면 (로그인 후에만 보인다) -->
+    <div id="todo-view" class="view" hidden>
+    <!-- 할 일 추가 -->
+    <section class="card" aria-labelledby="create-heading">
+      <h2 id="create-heading" class="visually-hidden">할 일 추가</h2>
+      <form id="create-form" class="todo-form" novalidate>
+        <div class="field">
+          <div class="field-label-row">
+            <label for="create-title">할 일</label>
+            <span class="counter" data-counter-for="title" data-max="100"></span>
+          </div>
+          <input id="create-title" name="title" type="text" autocomplete="off" placeholder="무엇을 해야 하나요?" required>
+          <p class="field-error" data-error-for="title" hidden></p>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label for="create-description">설명 <span class="optional">선택</span></label>
+            <span class="counter" data-counter-for="description" data-max="2000"></span>
+          </div>
+          <textarea id="create-description" name="description" rows="2" placeholder="자세한 내용을 적어두세요"></textarea>
+          <p class="field-error" data-error-for="description" hidden></p>
+        </div>
+
+        <div class="form-bottom">
+          <div class="field field-date">
+            <label for="create-due">마감일 <span class="optional">선택</span></label>
+            <div class="date-row">
+              <input id="create-due" name="due_date" type="date">
+              <button type="button" class="btn btn-ghost btn-sm" data-clear-for="due_date">지우기</button>
+            </div>
+            <p class="field-error" data-error-for="due_date" hidden></p>
+          </div>
+          <button type="submit" class="btn btn-primary" data-busy-label="추가 중…">추가</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 목록 -->
+    <section class="card" aria-labelledby="list-heading">
+      <h2 id="list-heading" class="visually-hidden">할 일 목록</h2>
+
+      <div class="toolbar">
+        <div class="segmented" role="group" aria-label="상태로 걸러 보기">
+          <button type="button" data-status="all">전체</button>
+          <button type="button" data-status="active">미완료</button>
+          <button type="button" data-status="completed">완료</button>
+        </div>
+        <div class="toolbar-selects">
+          <label class="select-label">
+            <span class="visually-hidden">정렬</span>
+            <select id="sort-select">
+              <option value="latest">최신순</option>
+              <option value="due_date">마감일순</option>
+            </select>
+          </label>
+          <label class="select-label">
+            <span class="visually-hidden">한 페이지에 보일 개수</span>
+            <select id="size-select">
+              <option value="5">5개씩</option>
+              <option value="10">10개씩</option>
+              <option value="20">20개씩</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div id="banner" class="banner" role="alert" hidden>
+        <p id="banner-message" class="banner-message"></p>
+        <div class="banner-actions">
+          <button type="button" id="banner-retry" class="btn btn-sm">다시 시도</button>
+          <a id="banner-mock-link" class="btn btn-ghost btn-sm" href="?mock=1" hidden>Mock 모드로 열기</a>
+        </div>
+      </div>
+
+      <div class="list-head">
+        <p id="list-summary" class="list-summary" aria-live="polite"></p>
+        <p id="list-loading" class="list-loading" role="status" hidden>불러오는 중…</p>
+      </div>
+      <ul id="todo-list" class="todo-list" aria-busy="true" aria-label="할 일"></ul>
+      <div id="list-empty" class="list-empty" hidden>
+        <p id="list-empty-message"></p>
+        <button type="button" id="list-empty-reset" class="btn btn-sm" hidden>전체 보기</button>
+      </div>
+
+      <nav id="pagination" class="pagination" aria-label="페이지" hidden></nav>
+    </section>
+    </div>
+  </div>
+
+  <!-- 상세 보기 / 수정 -->
+  <dialog id="detail-dialog" class="dialog" aria-labelledby="detail-title">
+    <div id="detail-view">
+      <header class="dialog-header">
+        <h2 id="detail-title" class="detail-title"></h2>
+        <button type="button" class="btn-icon" data-close-dialog aria-label="닫기">✕</button>
+      </header>
+      <div id="detail-badges" class="detail-badges"></div>
+      <p id="detail-description" class="detail-description"></p>
+      <dl class="detail-meta">
+        <div><dt>마감일</dt><dd id="detail-due"></dd></div>
+        <div><dt>만든 시각</dt><dd id="detail-created"></dd></div>
+        <div><dt>수정 시각</dt><dd id="detail-updated"></dd></div>
+        <div><dt>완료 시각</dt><dd id="detail-completed"></dd></div>
+      </dl>
+      <footer class="dialog-actions">
+        <button type="button" id="detail-delete" class="btn btn-danger-ghost">삭제</button>
+        <div class="dialog-actions-right">
+          <button type="button" id="detail-edit" class="btn">수정</button>
+          <button type="button" id="detail-toggle" class="btn btn-primary">완료하기</button>
+        </div>
+      </footer>
+    </div>
+
+    <form id="edit-form" class="todo-form" novalidate hidden>
+      <header class="dialog-header">
+        <h2 class="detail-title">할 일 수정</h2>
+        <button type="button" class="btn-icon" data-close-dialog aria-label="닫기">✕</button>
+      </header>
+      <div class="field">
+        <div class="field-label-row">
+          <label for="edit-title">제목</label>
+          <span class="counter" data-counter-for="title" data-max="100"></span>
+        </div>
+        <input id="edit-title" name="title" type="text" autocomplete="off" required>
+        <p class="field-error" data-error-for="title" hidden></p>
+      </div>
+      <div class="field">
+        <div class="field-label-row">
+          <label for="edit-description">설명 <span class="optional">선택</span></label>
+          <span class="counter" data-counter-for="description" data-max="2000"></span>
+        </div>
+        <textarea id="edit-description" name="description" rows="5"></textarea>
+        <p class="field-error" data-error-for="description" hidden></p>
+      </div>
+      <div class="field field-date">
+        <label for="edit-due">마감일 <span class="optional">선택</span></label>
+        <div class="date-row">
+          <input id="edit-due" name="due_date" type="date">
+          <button type="button" class="btn btn-ghost btn-sm" data-clear-for="due_date">지우기</button>
+        </div>
+        <p class="field-error" data-error-for="due_date" hidden></p>
+      </div>
+      <footer class="dialog-actions">
+        <span></span>
+        <div class="dialog-actions-right">
+          <button type="button" id="edit-cancel" class="btn">취소</button>
+          <button type="submit" class="btn btn-primary" data-busy-label="저장 중…">저장</button>
+        </div>
+      </footer>
+    </form>
+
+    <div id="detail-missing" hidden>
+      <header class="dialog-header">
+        <h2 id="detail-missing-title" class="detail-title">할 일을 찾을 수 없어요</h2>
+        <button type="button" class="btn-icon" data-close-dialog aria-label="닫기">✕</button>
+      </header>
+      <p id="detail-missing-message" class="confirm-message">이미 삭제되었거나 다른 곳에서 바뀌었을 수 있어요. 목록을 새로 불러올게요.</p>
+      <footer class="dialog-actions">
+        <span></span>
+        <button type="button" id="detail-back" class="btn btn-primary">목록으로 돌아가기</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- 삭제 확인 -->
+  <dialog id="confirm-dialog" class="dialog dialog-sm" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <h2 id="confirm-title" class="detail-title">이 할 일을 삭제할까요?</h2>
+      <p id="confirm-message" class="confirm-message"></p>
+      <footer class="dialog-actions">
+        <span></span>
+        <div class="dialog-actions-right">
+          <button value="cancel" class="btn" autofocus>취소</button>
+          <button value="confirm" class="btn btn-danger">삭제</button>
+        </div>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- popover: 모달이 열려 있어도 토스트가 그 위에 보이도록 최상위 레이어에 띄운다. -->
+  <div id="toasts" class="toasts" aria-live="polite" popover="manual"></div>
+</body>
+</html>
