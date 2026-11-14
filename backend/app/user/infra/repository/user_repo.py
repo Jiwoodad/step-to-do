@@ -6,7 +6,7 @@ from database import SessionLocal
 from app.user.domain.repository.user_repo import IUserRepository
 from app.user.domain.model import User as UserVO
 from app.user.infra.db_models.user import User
-from utils.db_utils import row_to_dict
+from app.utils.db_utils import row_to_dict
 
 
 class UserRepository(IUserRepository):

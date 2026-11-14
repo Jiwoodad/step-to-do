@@ -4,12 +4,9 @@ from typing import Annotated
 from fastapi import HTTPException, Depends
 from app.user.domain.model import User
 from app.user.domain.repository.user_repo import IUserRepository
-from dependency_injector.wiring import inject, Provide
-from containers import Container
 
 
 class UserService:
-    @inject
     def __init__(
         self,
         hash_password: Callable[[str], str],
