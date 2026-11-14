@@ -32,10 +32,10 @@ const rejection = async (promise) => {
   assert.fail("실패해야 하는 요청이 성공했습니다.");
 };
 /** 인증코드를 받아 확인하고 가입까지 마친다. */
-async function verifiedSignup(api, email, password) {
+async function verifiedSignup(api, email, password, name = "테스터") {
   await api.sendEmailCode({ email });
   await api.verifyEmailCode({ email, code: await mock.getMockEmailCode(email) });
-  return api.signup({ email, password });
+  return api.signup({ email, password, name });
 }
 const wrongCode = (code) => (code === "000000" ? "111111" : "000000");
 const settled = (promise, ms = 80) => Promise.race([promise.then(() => "resolved", () => "rejected"), new Promise((r) => setTimeout(() => r("pending"), ms))]);
@@ -52,8 +52,9 @@ beforeEach(async () => {
 describe("인증", () => {
   test("회원가입 → 로그인 → /me", async () => {
     const { api, session } = client();
-    const user = await verifiedSignup(api, "  New@Example.com ", "my password!");
+    const user = await verifiedSignup(api, "  New@Example.com ", "my password!", "  새 사용자  ");
     assert.equal(user.email, "new@example.com");
+    assert.equal(user.name, "새 사용자", "앞뒤 공백을 빼고 저장한다");
     assert.equal(user.password, undefined);
     assert.equal(user.password_hash, undefined);
     const token = await api.login({ email: "new@example.com", password: "my password!" });
@@ -61,28 +62,41 @@ describe("인증", () => {
     assert.equal(token.expires_in, 3600);
     session.start(token);
     assert.equal((await api.me()).email, "new@example.com");
+    assert.equal((await api.me()).name, "새 사용자");
   });
 
   test("테스트 사용자 두 명으로 로그인할 수 있다", async () => {
     for (const user of [ALICE, BOB]) {
       const { api } = await loggedIn(user);
-      assert.equal((await api.me()).email, user.email);
+      const me = await api.me();
+      assert.equal(me.email, user.email);
+      assert.equal(me.name, user.name);
     }
   });
 
   test("중복 이메일 → 409 (대소문자 무시)", async () => {
     const { api } = client();
-    const err = await rejection(api.signup({ email: ALICE.email.toUpperCase(), password: "password123" }));
+    const err = await rejection(api.signup({ email: ALICE.email.toUpperCase(), password: "password123", name: "다른 앨리스" }));
     assert.equal(err.status, 409);
   });
 
   test("가입 검증: 이메일 형식, 비밀번호 8~64자 → 422 필드 오류", async () => {
     const { api } = client();
-    const err = await rejection(api.signup({ email: "not-an-email", password: "short" }));
+    const err = await rejection(api.signup({ email: "not-an-email", password: "short", name: "테스터" }));
     assert.equal(err.status, 422);
     assert.deepEqual(Object.keys(err.fieldErrors).sort(), ["email", "password"]);
-    assert.equal((await rejection(api.signup({ email: "a@b.co", password: "x".repeat(65) }))).status, 422);
+    assert.equal((await rejection(api.signup({ email: "a@b.co", password: "x".repeat(65), name: "테스터" }))).status, 422);
     assert.ok(await verifiedSignup(api, "a@b.co", "😀".repeat(8)), "문자 수로 센다");
+  });
+
+  test("가입 검증: 이름은 필수, 앞뒤 공백 제거 후 1~20자 → 422 name 필드 오류", async () => {
+    const { api } = client();
+    for (const name of [undefined, "   ", "가".repeat(21)]) {
+      const err = await rejection(api.signup({ email: "a@b.co", password: "password123", name }));
+      assert.equal(err.status, 422);
+      assert.deepEqual(Object.keys(err.fieldErrors), ["name"]);
+    }
+    assert.equal((await verifiedSignup(api, "a@b.co", "password123", "😀".repeat(20))).name, "😀".repeat(20), "문자 수로 센다");
   });
 
   test("로그인은 OAuth2 form만 받는다: JSON 본문은 422(username·password 누락)", async () => {
@@ -142,10 +156,10 @@ describe("이메일 인증 (SMTP + Redis 흉내)", () => {
 
   test("인증 없이 가입하면 403, 다른 이메일로 인증해도 403", async () => {
     const { api } = client();
-    assert.equal((await rejection(api.signup({ email, password: "password123" }))).status, 403);
+    assert.equal((await rejection(api.signup({ email, password: "password123", name: "테스터" }))).status, 403);
     await api.sendEmailCode({ email: "other@example.com" });
     await api.verifyEmailCode({ email: "other@example.com", code: await mock.getMockEmailCode("other@example.com") });
-    assert.equal((await rejection(api.signup({ email, password: "password123" }))).status, 403);
+    assert.equal((await rejection(api.signup({ email, password: "password123", name: "테스터" }))).status, 403);
   });
 
   test("발송 응답에는 코드가 없다. 이메일 형식이 틀리면 보내지 않는다", async () => {
@@ -200,7 +214,7 @@ describe("이메일 인증 (SMTP + Redis 흉내)", () => {
     await api.verifyEmailCode({ email, code });
     assert.equal((await rejection(api.verifyEmailCode({ email, code }))).status, 400);
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal((await rejection(api.signup({ email, password: "password123" }))).status, 403);
+    assert.equal((await rejection(api.signup({ email, password: "password123", name: "테스터" }))).status, 403);
   });
 });
 

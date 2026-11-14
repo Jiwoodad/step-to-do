@@ -97,12 +97,12 @@ Redis 키 예: `email_code:{이메일}` (값: 코드 해시·시도 횟수, TTL 
 
 ```json
 // 요청 — 비밀번호 확인 칸은 화면에서만 검사하고 보내지 않는다.
-{ "email": "carol@example.com", "password": "carol-password" }
+{ "email": "carol@example.com", "password": "carol-password", "name": "캐롤" }
 ```
 
 ```json
 // 201 Created — 비밀번호(해시 포함)는 절대 응답에 넣지 않는다.
-{ "id": 3, "email": "carol@example.com", "created_at": "2026-10-30T02:00:00Z" }
+{ "id": 3, "email": "carol@example.com", "name": "캐롤", "created_at": "2026-10-30T02:00:00Z" }
 ```
 
 | 상태 | 언제 | 본문 예 | 화면 |
@@ -110,11 +110,11 @@ Redis 키 예: `email_code:{이메일}` (값: 코드 해시·시도 횟수, TTL 
 | `201` | 가입 성공 | 위 사용자 | 로그인 화면으로 이동, "회원가입이 완료되었어요" 안내, 이메일 채워 둠. **자동 로그인하지 않는다** |
 | `403` | 이메일 인증을 안 했거나 인증 유효 시간이 지남 | `{"detail": "이메일 인증이 필요합니다."}` | "이메일 인증이 만료되었어요" 안내 후 인증부터 다시 |
 | `409` | 이미 가입된 이메일 | `{"detail": "이미 가입된 이메일입니다."}` | 이메일 칸 아래 안내, 인증부터 다시 |
-| `422` | 이메일 형식·비밀번호 길이 위반 | Pydantic 기본 `detail` 배열 (`loc: ["body","email"]` 등) | 해당 칸 아래 `msg` 표시 |
+| `422` | 이메일 형식·비밀번호 길이·이름 길이 위반 | Pydantic 기본 `detail` 배열 (`loc: ["body","email"]`, `["body","name"]` 등) | 해당 칸 아래 `msg` 표시 |
 
-- 화면은 응답에 `id`와 `email`(문자열)이 있는지 확인한다.
+- 화면은 응답에 `id`와 `email`(문자열)이 있는지 확인한다. `name`은 상단 표시에 쓰고, 없으면 이메일을 대신 보여준다.
 - 서버는 화면의 인증 표시를 믿지 않고 `email_verified` 기록을 직접 확인한다. 가입에 성공하면 그 기록을 지운다.
-- 인증 여부는 서버가 Redis 기록으로 확인한다. `signup` 요청에는 이메일과 비밀번호만 담긴다.
+- 인증 여부는 서버가 Redis 기록으로 확인한다. `signup` 요청에는 이메일·비밀번호·이름만 담긴다.
 
 ### 2.3 로그인 `POST /api/auth/login` (OAuth2 Password 방식)
 
@@ -159,8 +159,10 @@ Authorization: Bearer <access_token>
 
 ```json
 // 200 OK
-{ "id": 3, "email": "carol@example.com", "created_at": "2026-10-30T02:00:00Z" }
+{ "id": 3, "email": "carol@example.com", "name": "캐롤", "created_at": "2026-10-30T02:00:00Z" }
 ```
+
+화면은 로그인 후 상단에 `name`을 "캐롤님"처럼 표시한다(이메일은 마우스를 올리면 보인다).
 
 `401`이면 화면은 저장된 토큰을 지우고 로그인 화면으로 보낸다. 그 밖의 실패(연결 실패, `5xx`)면 토큰은 지우지 않고 "다시 시도" 버튼을 보여준다.
 
@@ -175,7 +177,7 @@ WWW-Authenticate: Bearer
 - 헤더 없음, 서명 불일치, 만료, 탈퇴한 사용자 등 **로그인을 다시 해야 하는 모든 경우는 `401`**로 준다. 본문 문구는 화면에 보이지 않는다(화면 고정 문구를 쓴다).
 - 남의 할 일은 `401`이 아니라 `403`으로 준다(§4). 화면은 `401`만 로그아웃 처리하고, `403`·`404`는 안내만 한다.
 
-### 2.6 이메일·비밀번호 검증 규칙
+### 2.6 이메일·비밀번호·이름 검증 규칙
 
 화면도 같은 규칙으로 먼저 검사하지만, 최종 판단은 서버가 한다.
 
@@ -184,6 +186,7 @@ WWW-Authenticate: Bearer
 | 이메일 | 앞뒤 공백 제거, 1~254자, `이름@도메인.최상위` 형식 검사 후 **인증코드로 소유 확인**(§2.1) | 공백을 빼고 보낸다. 형식이 틀리면 `올바른 이메일 형식이 아닙니다`를 표시하고 코드를 요청하지 않는다. 길이보다 형식을 먼저 본다 |
 | 이메일 비교 | **소문자로 바꿔 저장·비교** (`Carol@Example.com` = `carol@example.com`) | 입력한 그대로 보낸다 |
 | 비밀번호 | **8~64자**(문자 수), 공백 포함 허용, 앞뒤 공백도 그대로(자르지 않음), 영문·숫자·특수문자 조합 강제 없음 | 자르지 않고 보낸다 |
+| 이름 (`name`) | **필수. 앞뒤 공백 제거 후 1~20자**(문자 수), 내부 공백 포함. 중복 허용 | 앞뒤 공백을 빼고 보낸다. 비었거나 20자를 넘으면 이름 칸 아래 안내 |
 | 비밀번호 확인 | 화면에서만 검사 | API에 보내지 않는다 |
 | 로그인 시 비밀번호 | 비어 있지 않은지만 확인 (길이 규칙은 가입할 때만) | 같다 |
 
@@ -317,7 +320,7 @@ WWW-Authenticate: Bearer
 | 앞뒤에 공백이 붙은 100자 | 100자 | 100 | 허용 |
 | 101자 | — | 101 | `422` |
 
-- 길이는 **문자 수**(Python `len()`, 유니코드 코드 포인트)로 센다. 화면도 같은 방식으로 센다(이모지 1개 = 1자). 설명 2,000자, 이메일 254자, 비밀번호 8~64자도 같은 기준이다.
+- 길이는 **문자 수**(Python `len()`, 유니코드 코드 포인트)로 센다. 화면도 같은 방식으로 센다(이모지 1개 = 1자). 설명 2,000자, 이메일 254자, 비밀번호 8~64자, 이름 20자도 같은 기준이다.
 - 공백은 Python `str.strip()`이 지우는 문자 기준이다. 화면의 `String.prototype.trim()`과 사실상 같다.
 - Pydantic v2 예: `Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]`. 공백을 먼저 지우고 길이를 검사한다.
 - 화면은 성공 응답이 `id`, `title`(문자열), `is_completed`(불리언)를 갖췄는지 확인한다. 빠지면 "서버 응답 형식이 예상과 다릅니다"를 띄우고 콘솔에 실제 응답을 찍는다.
@@ -416,7 +419,7 @@ FastAPI 기본 형식을 그대로 쓰면 된다.
 }
 ```
 
-- 필드 이름은 `title`, `description`, `due_date`, `is_completed`, `email`, `password`, `code`를 그대로 쓴다. 이 이름이 화면의 입력칸과 연결된다. 로그인의 `username`은 이메일 칸에 연결한다.
+- 필드 이름은 `title`, `description`, `due_date`, `is_completed`, `email`, `password`, `name`, `code`를 그대로 쓴다. 이 이름이 화면의 입력칸과 연결된다. 로그인의 `username`은 이메일 칸에 연결한다.
 - `msg`는 그대로 화면에 보인다. 한국어로 보이게 하려면 서버에서 `msg`만 바꾸면 된다. 화면은 `input`을 쓰지 않는다. 그래도 `msg`에 비밀번호가 들어 있으면 `•••`로 가린다.
 - 직접 만든 형식 `{"detail": {"message": "..."}}`, `{"message": "..."}`도 읽는다.
 
@@ -489,9 +492,9 @@ J='Content-Type: application/json'
 # 이메일 인증 + 회원가입
 curl -s -X POST "$API/auth/email-verification/send" -H "$J" -d '{"email":"carol@example.com"}'           # 200 {expires_in,resend_after}, 코드는 메일로만
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/auth/email-verification/send" -H "$J" -d '{"email":"carol@example.com"}'  # 429 (재발송 대기)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/auth/signup" -H "$J" -d '{"email":"carol@example.com","password":"carol-password"}'  # 403 (인증 전)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/auth/signup" -H "$J" -d '{"email":"carol@example.com","password":"carol-password","name":"캐롤"}'  # 403 (인증 전)
 curl -s -X POST "$API/auth/email-verification/verify" -H "$J" -d '{"email":"carol@example.com","code":"<메일로 받은 코드>"}'  # 200 {verified:true,...}
-curl -s -X POST "$API/auth/signup" -H "$J" -d '{"email":"carol@example.com","password":"carol-password"}'  # 201 {id,email,...}, 비밀번호 없음
+curl -s -X POST "$API/auth/signup" -H "$J" -d '{"email":"carol@example.com","password":"carol-password","name":"캐롤"}'  # 201 {id,email,name,...}, 비밀번호 없음
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/auth/email-verification/send" -H "$J" -d '{"email":"Carol@Example.com"}'  # 409
 
 # 로그인 (OAuth2 form)
@@ -543,6 +546,7 @@ curl -s -i -X OPTIONS "$API/todos" -H 'Origin: http://localhost:5500' \
 | 11 | 기존 `todos` 행의 소유자 | **설계 단계부터 사용자 id 외래 키**. 별도 마이그레이션 없음 |
 | 12 | 토큰 저장 방식 | sessionStorage + Bearer 헤더 |
 | 13 | 로그인 시도 제한 | 첫 버전 없음 |
+| 14 | 사용자 이름 | **`name` 필수**, 앞뒤 공백 제거 후 1~20자. 가입 요청·가입 응답·`/me` 응답에 포함. 화면 상단에 "OO님"으로 표시 (2026-11-14 추가) |
 
 ## 14. 이메일 인증 세부 합의
 

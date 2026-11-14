@@ -71,10 +71,10 @@ test("로그인은 OAuth2 Password 방식: form 인코딩으로 username·passwo
 
 test("회원가입·이메일 인증은 JSON, 토큰 없음, 비밀번호 확인은 보내지 않는다", async () => {
   nextResponse = { status: 201, body: { id: 1, email: "a@b.co", created_at: "2026-10-30T00:00:00Z" } };
-  await api.signup({ email: "a@b.co", password: "password123", password_confirm: "password123" });
+  await api.signup({ email: "a@b.co", password: "password123", name: "에이", password_confirm: "password123" });
   assert.equal(calls[0].url, "http://localhost:8000/api/auth/signup");
   assert.equal(calls[0].init.headers["Content-Type"], "application/json");
-  assert.deepEqual(Object.keys(JSON.parse(calls[0].init.body)), ["email", "password"]);
+  assert.deepEqual(Object.keys(JSON.parse(calls[0].init.body)), ["email", "password", "name"]);
 
   nextResponse = { status: 200, body: { expires_in: 300, resend_after: 60 } };
   await api.sendEmailCode({ email: "a@b.co" });

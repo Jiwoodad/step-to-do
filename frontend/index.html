@@ -17,7 +17,7 @@
       <span id="mock-badge" class="badge badge-muted" hidden title="브라우저에만 저장되는 가짜 API를 사용 중입니다">Mock API</span>
       <div id="user-bar" class="user-bar" hidden>
         <span class="visually-hidden">로그인한 사용자</span>
-        <span id="user-email" class="user-email"></span>
+        <span id="user-name" class="user-name"></span>
         <button type="button" id="logout-button" class="btn btn-ghost btn-sm">로그아웃</button>
       </div>
     </header>
@@ -75,6 +75,12 @@
           </div>
           <p id="signup-code-hint" class="field-hint">메일로 받은 숫자 6자리를 입력해 주세요.</p>
           <p class="field-error" data-error-for="code" hidden></p>
+        </div>
+        <div class="field">
+          <label for="signup-name">이름</label>
+          <input id="signup-name" name="name" type="text" autocomplete="name" aria-describedby="signup-name-hint" required>
+          <p id="signup-name-hint" class="field-hint">1~20자. 화면 위쪽에 "OO님"으로 보여요.</p>
+          <p class="field-error" data-error-for="name" hidden></p>
         </div>
         <div class="field">
           <label for="signup-password">비밀번호</label>

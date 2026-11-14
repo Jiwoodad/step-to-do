@@ -21,8 +21,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Mock 테스트 계정. 화면의 로그인 안내와 테스트에서 쓴다. */
 export const MOCK_TEST_USERS = Object.freeze([
-  Object.freeze({ email: "alice@example.com", password: "password123" }),
-  Object.freeze({ email: "bob@example.com", password: "password123" }),
+  Object.freeze({ email: "alice@example.com", password: "password123", name: "앨리스" }),
+  Object.freeze({ email: "bob@example.com", password: "password123", name: "밥" }),
 ]);
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -85,8 +85,8 @@ function pushTodo(db, ownerId, sample) {
  */
 async function seed({ legacyTodos = null } = {}) {
   const db = { nextUserId: 1, users: [], nextId: 1, todos: [], tokens: {} };
-  for (const { email, password } of MOCK_TEST_USERS) {
-    db.users.push({ id: db.nextUserId++, email, password_hash: await hashPassword(password), created_at: nowIso() });
+  for (const { email, password, name } of MOCK_TEST_USERS) {
+    db.users.push({ id: db.nextUserId++, email, name, password_hash: await hashPassword(password), created_at: nowIso() });
   }
   const [alice, bob] = db.users;
   if (legacyTodos) {
@@ -233,7 +233,7 @@ function unauthorized(detail) {
   return { status: 401, body: { detail }, headers: { "WWW-Authenticate": "Bearer" } };
 }
 
-const publicUser = ({ id, email, created_at }) => ({ id, email, created_at });
+const publicUser = ({ id, email, name, created_at }) => ({ id, email, name, created_at });
 // 소유자 ID는 응답에 내보내지 않는다. (API.md: 소유자는 서버가 토큰으로 정한다)
 const publicTodo = ({ owner_id, ...todo }) => todo;
 
@@ -314,6 +314,12 @@ function signup(db, body, passwordHash) {
   if (typeof password !== "string" || password === "") passwordError("비밀번호는 필수입니다.", "missing");
   else if (charCount(password) < 8) passwordError("비밀번호는 8자 이상이어야 합니다.", "string_too_short");
   else if (charCount(password) > 64) passwordError("비밀번호는 64자 이하여야 합니다.", "string_too_long");
+  // 이름: 앞뒤 공백 제거 후 1~20자 (Pydantic StringConstraints(strip_whitespace=True, min_length=1, max_length=20)과 같게)
+  const name = typeof body?.name === "string" ? body.name.trim() : null;
+  const nameError = (msg, type) => errors.push({ loc: ["body", "name"], msg, type, input: body?.name ?? null });
+  if (name === null) nameError("이름은 필수입니다.", "missing");
+  else if (name === "") nameError("이름은 1자 이상이어야 합니다.", "string_too_short");
+  else if (charCount(name) > 20) nameError("이름은 20자 이하여야 합니다.", "string_too_long");
   if (errors.length) return validationError(errors);
 
   const email = normalizeEmail(body.email);
@@ -323,7 +329,7 @@ function signup(db, body, passwordHash) {
     return { status: 403, body: { detail: "이메일 인증이 필요합니다." } };
   }
   delete db.verifiedEmails[email];
-  const user = { id: db.nextUserId++, email, password_hash: passwordHash, created_at: nowIso() };
+  const user = { id: db.nextUserId++, email, name, password_hash: passwordHash, created_at: nowIso() };
   db.users.push(user);
   save(db);
   return { status: 201, body: publicUser(user) };

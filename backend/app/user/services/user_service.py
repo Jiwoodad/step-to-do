@@ -15,7 +15,7 @@ class UserService:
         self.user_repo = user_repo
         self.hash_password = hash_password
 
-    def create_user(self, email: str, password: str) -> User:
+    def create_user(self, email: str, password: str, name: str) -> User:
         self.user_repo.validate_email_format(email)
 
         _user = None
@@ -28,6 +28,27 @@ class UserService:
             raise HTTPException(status_code=422)
 
         password_hash = self.hash_password(password)
-        user = User(email=email, password=password_hash)
+        user = User(email=email, password=password_hash, name=name)
         self.user_repo.save(user)
         return user
+
+    def update_user(
+        self, user_id: int, name: str | None = None, password: str | None = None
+    ):
+        user = self.user_repo.find_by_id(user_id)
+
+        if name:
+            user.name = name
+        if password:
+            user.password = self.hash_password(password)
+
+        self.user_repo.update(user)
+
+        return user
+
+    def get_users(self, page: int, items_per_page: int) -> tuple[int, list[User]]:
+        users = self.user_repo.get_users(page, items_per_page)
+        return users
+
+    def delete_user(self, user_id: int):
+        return self.user_repo.delete(user_id)

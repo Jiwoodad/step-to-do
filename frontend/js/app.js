@@ -12,6 +12,7 @@ const DESCRIPTION_MAX = 2000;
 const EMAIL_MAX = 254;
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 64;
+const NAME_MAX = 20;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_PATTERN = /^\d{6}$/;
 const STATUS_VALUES = ["all", "active", "completed"];
@@ -84,7 +85,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const els = {
   mockBadge: $("#mock-badge"),
   userBar: $("#user-bar"),
-  userEmail: $("#user-email"),
+  userName: $("#user-name"),
   logoutButton: $("#logout-button"),
   bootView: $("#boot-view"),
   bootMessage: $("#boot-message"),
@@ -186,8 +187,9 @@ async function boot() {
 function enterApp(user, { fresh = false, focus = false } = {}) {
   if (fresh) resetTodoState(); // 새로 로그인한 경우: 이전 사용자의 흔적(필터·페이지 포함)을 지우고 시작
   state.user = user;
-  els.userEmail.textContent = user.email;
-  els.userEmail.title = user.email;
+  // 이름이 없으면(예: 이름 기능 전에 만든 Mock 계정) 이메일을 대신 보여준다.
+  els.userName.textContent = typeof user.name === "string" && user.name.trim() ? `${user.name}님` : user.email;
+  els.userName.title = user.email;
   showView("todo");
   renderList();
   loadList();
@@ -199,8 +201,8 @@ function endSession(notice) {
   session.end(); // 진행 중인 요청의 응답은 이제 화면에 반영되지 않는다.
   booting = false;
   state.user = null;
-  els.userEmail.textContent = "";
-  els.userEmail.title = "";
+  els.userName.textContent = "";
+  els.userName.title = "";
   resetTodoState();
   clearToasts();
   showAuth("login", { notice });
@@ -292,6 +294,13 @@ function validateAuthForm(form, { signup }) {
     else errors.code = message;
   }
 
+  let name = "";
+  if (signup) {
+    name = form.elements.name.value.trim(); // 앞뒤 공백을 빼고 보낸다. 서버도 같은 규칙으로 다시 검사한다.
+    if (!name) errors.name = ["이름을 입력해 주세요."];
+    else if (charCount(name) > NAME_MAX) errors.name = [`이름은 ${NAME_MAX}자 이하로 입력해 주세요. (지금 ${charCount(name)}자)`];
+  }
+
   if (!password) errors.password = ["비밀번호를 입력해 주세요."];
   else if (signup && charCount(password) < PASSWORD_MIN) errors.password = [`비밀번호는 ${PASSWORD_MIN}자 이상이어야 해요. (지금 ${charCount(password)}자)`];
   else if (signup && charCount(password) > PASSWORD_MAX) errors.password = [`비밀번호는 ${PASSWORD_MAX}자 이하여야 해요. (지금 ${charCount(password)}자)`];
@@ -302,7 +311,7 @@ function validateAuthForm(form, { signup }) {
     if (!confirm) errors.password_confirm = ["비밀번호를 한 번 더 입력해 주세요."];
     else if (!errors.password && confirm !== password) errors.password_confirm = ["비밀번호가 일치하지 않아요."];
   }
-  return { email, password, errors };
+  return { email, password, name, errors };
 }
 
 /** 서버가 거절한 이유를 로그인·회원가입 폼 안에 보여준다. 비밀번호 값은 어떤 문구에도 넣지 않는다. */
@@ -364,13 +373,13 @@ async function handleSignup(event) {
   if (isFormBusy(form)) return;
   showFormError(form, null);
   showAuthNotice(null);
-  const { email, password, errors } = validateAuthForm(form, { signup: true });
+  const { email, password, name, errors } = validateAuthForm(form, { signup: true });
   showFieldErrors(form, errors);
   if (Object.keys(errors).length) return;
 
   setFormBusy(form, true);
   try {
-    await api.signup({ email, password }); // password_confirm은 보내지 않는다.
+    await api.signup({ email, password, name }); // password_confirm은 보내지 않는다.
   } catch (err) {
     setFormBusy(form, false);
     // 인증이 만료됐거나(403) 그 사이 같은 이메일이 가입됐으면(409) 이메일 인증부터 다시 한다.
@@ -526,7 +535,7 @@ async function handleVerifyCode() {
   els.mockMailbox.hidden = true;
   showFieldErrors(form, {}, { focus: false });
   renderEmailVerification();
-  form.elements.password.focus();
+  form.elements.name.focus();
 }
 
 // ---------- 할 일 폼 ----------

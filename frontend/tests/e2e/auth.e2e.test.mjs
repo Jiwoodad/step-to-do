@@ -47,6 +47,7 @@ test("회원가입 → 로그인 → 할 일 관리 → 로그아웃", async () 
 
   // 인증 전에는 가입할 수 없다.
   await page.fill("#signup-email", "carol@example.com");
+  await page.fill("#signup-name", "캐롤");
   await page.fill("#signup-password", "carol-password");
   await page.fill("#signup-password-confirm", "carol-password");
   await page.click('#signup-form button[type="submit"]');
@@ -71,7 +72,16 @@ test("회원가입 → 로그인 → 할 일 관리 → 로그아웃", async () 
   assert.ok(await page.isHidden("#email-code-send"));
   assert.ok(await page.isHidden("#mock-mailbox"));
   assert.equal(await page.getAttribute("#signup-email", "readonly"), "", "인증한 이메일은 바꿀 수 없다");
-  assert.equal(await focused(page), "|signup-password");
+  assert.equal(await focused(page), "|signup-name");
+
+  // 이름: 공백만이면 안내, 20자 초과면 길이 안내
+  await page.fill("#signup-name", "   ");
+  await page.click('#signup-form button[type="submit"]');
+  assert.equal(await page.textContent('#signup-form [data-error-for="name"]'), "이름을 입력해 주세요.");
+  await page.fill("#signup-name", "가".repeat(21));
+  await page.click('#signup-form button[type="submit"]');
+  assert.match(await page.textContent('#signup-form [data-error-for="name"]'), /20자 이하.*21자/);
+  await page.fill("#signup-name", "  캐롤  ");
 
   // 비밀번호: 길이, 확인 불일치 — 문구에 비밀번호가 나오지 않는다.
   await page.fill("#signup-password", "abc1234");
@@ -95,7 +105,8 @@ test("회원가입 → 로그인 → 할 일 관리 → 로그아웃", async () 
   assert.equal(await storedSession(page), null);
 
   await login(page, { email: "carol@example.com", password: "carol-password" });
-  assert.equal(await page.textContent("#user-email"), "carol@example.com");
+  assert.equal(await page.textContent("#user-name"), "캐롤님", "앞뒤 공백을 뺀 이름으로 가입된다");
+  assert.equal(await page.getAttribute("#user-name", "title"), "carol@example.com");
   assert.ok(await page.isVisible("#logout-button"));
   assert.match(await page.textContent("#list-empty-message"), /아직 할 일이 없어요/);
   assert.equal(await focused(page), "|create-title");
@@ -179,6 +190,7 @@ test("이메일 인증: 코드 만료, 시도 초과, 인증 유효 시간 만�
   // 인증한 뒤 유효 시간이 지나서 가입하면 다시 인증하라고 안내한다. (서버 403)
   await page.evaluate(() => window.steptodoMock.configure({ emailCodeTtlSec: 60 }));
   await verifySignupEmail(page, "erin@example.com");
+  await page.fill("#signup-name", "에린");
   await page.fill("#signup-password", "erin-password");
   await page.fill("#signup-password-confirm", "erin-password");
   await page.waitForTimeout(1100);
@@ -238,11 +250,12 @@ test("실제 서버 경로(fetch)의 요청 형식: 로그인 form 전송, Beare
   await page.fill("#signup-code", "123456");
   await page.click("#email-code-verify");
   await page.waitForSelector("#email-verified:not([hidden])");
+  await page.fill("#signup-name", "스텁");
   await page.fill("#signup-password", "p@ss w+rd&=1");
   await page.fill("#signup-password-confirm", "p@ss w+rd&=1");
   await page.click('#signup-form button[type="submit"]');
   await page.waitForSelector("#login-form:not([hidden])");
-  assert.deepEqual(JSON.parse(find("/api/auth/signup").body), { email: "stub@example.com", password: "p@ss w+rd&=1" });
+  assert.deepEqual(JSON.parse(find("/api/auth/signup").body), { email: "stub@example.com", password: "p@ss w+rd&=1", name: "스텁" });
   assert.deepEqual(JSON.parse(find("/api/auth/email-verification/verify").body), { email: "stub@example.com", code: "123456" });
 
   await page.fill("#login-password", "p@ss w+rd&=1");
@@ -375,7 +388,7 @@ test("새로고침: 같은 탭은 로그인 유지, 새 탭(새 세션)은 다�
   await page.reload();
   await waitForView(page);
   assert.equal(await currentView(page), "todo");
-  assert.equal(await page.textContent("#user-email"), ALICE.email);
+  assert.equal(await page.textContent("#user-name"), `${ALICE.name}님`);
   assert.equal(await page.getAttribute('[data-status="active"]', "aria-pressed"), "true", "같은 사용자는 필터도 유지");
   assert.ok(!page.url().includes("mock-token"), "토큰은 주소에 없다");
 
@@ -434,7 +447,7 @@ test("사용자 전환: 이전 사용자의 목록·상세·입력·오류·필�
   assert.ok(await page.isHidden('#create-form [data-error-for="title"]'));
   assert.equal(await page.getAttribute('[data-status="all"]', "aria-pressed"), "true");
   assert.equal(await page.inputValue("#size-select"), "10");
-  assert.equal(await page.textContent("#user-email"), BOB.email);
+  assert.equal(await page.textContent("#user-name"), `${BOB.name}님`);
   await context.close();
 });
 
@@ -500,7 +513,7 @@ test("다른 사용자의 할 일(403): 상세 창에서 권한 안내 후 목�
   await page.waitForSelector(".toast-error");
   assert.ok((await toastTexts(page)).some((text) => text.includes("권한")));
   await idle(page);
-  assert.equal(await page.textContent("#user-email"), ALICE.email);
+  assert.equal(await page.textContent("#user-name"), `${ALICE.name}님`);
   assert.ok(!(await mockDb(page)).todos.find((todo) => todo.id === nextId && todo.owner_id === 1));
   await context.close();
 });
@@ -528,7 +541,7 @@ test("403·404는 각각 안내하고 로그아웃시키지 않는다", async ()
   assert.equal(await currentView(page), "todo");
   await page.click("#detail-back");
   await idle(page);
-  assert.equal(await page.textContent("#user-email"), ALICE.email);
+  assert.equal(await page.textContent("#user-name"), `${ALICE.name}님`);
   await context.close();
 });
 
@@ -571,7 +584,10 @@ test("키보드만으로 이메일 인증 회원가입", async () => {
   await page.keyboard.type(await page.evaluate(() => window.steptodoMock.emailCode("keys@example.com")));
   await page.keyboard.press("Enter"); // 코드 칸의 Enter = 확인
   await page.waitForSelector("#email-verified:not([hidden])");
-  assert.equal(await waitForFocus(page, "|signup-password"), "|signup-password");
+  assert.equal(await waitForFocus(page, "|signup-name"), "|signup-name");
+  await page.keyboard.type("키보드");
+  await page.keyboard.press("Tab");
+  assert.equal(await focused(page), "|signup-password");
   await page.keyboard.type("keyboard-pass");
   await page.keyboard.press("Tab");
   assert.equal(await focused(page), "|signup-password-confirm");
@@ -593,6 +609,7 @@ test("모바일: 로그인·추가·삭제·로그아웃, 가로 스크롤 없�
   await page.click('[data-auth-mode="signup"]');
   await verifySignupEmail(page, "a-very-long-email-address-for-mobile@example.com");
   assert.ok(await noOverflow(), "이메일 인증 화면도 넘치지 않는다");
+  await page.fill("#signup-name", "모바일");
   await page.fill("#signup-password", "mobile-pass-1");
   await page.fill("#signup-password-confirm", "mobile-pass-1");
   await page.tap('#signup-form button[type="submit"]');

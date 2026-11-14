@@ -152,7 +152,7 @@ const isCodeVerified = (data) => Boolean(data) && data.verified === true;
 
 const TODO_SHAPE = "{ id, title, is_completed, ... } 형식의 할 일";
 const PAGE_SHAPE = "{ items, total, page, size } 형식의 목록";
-const USER_SHAPE = "{ id, email, ... } 형식의 사용자";
+const USER_SHAPE = "{ id, email, name, ... } 형식의 사용자";
 const TOKEN_SHAPE = "{ access_token, token_type: \"bearer\", expires_in } 형식의 토큰";
 const CODE_SENT_SHAPE = "{ expires_in, resend_after } 형식의 응답";
 const CODE_VERIFIED_SHAPE = "{ verified: true, expires_in } 형식의 응답";
@@ -227,8 +227,8 @@ export function createApi({ apiBaseUrl = "/api", useMock = false, session, onUna
       request("POST", "/auth/email-verification/send", { auth: false, body: { email }, expect: isCodeSent, expected: CODE_SENT_SHAPE }),
     verifyEmailCode: ({ email, code }) =>
       request("POST", "/auth/email-verification/verify", { auth: false, body: { email, code }, expect: isCodeVerified, expected: CODE_VERIFIED_SHAPE }),
-    signup: ({ email, password }) =>
-      request("POST", "/auth/signup", { auth: false, body: { email, password }, expect: isUser, expected: USER_SHAPE }),
+    signup: ({ email, password, name }) =>
+      request("POST", "/auth/signup", { auth: false, body: { email, password, name }, expect: isUser, expected: USER_SHAPE }),
     /** OAuth2 Password 방식: application/x-www-form-urlencoded로 username(=이메일)·password를 보낸다. */
     login: ({ email, password }) =>
       request("POST", "/auth/login", { auth: false, form: { grant_type: "password", username: email, password }, expect: isTokenResponse, expected: TOKEN_SHAPE }),
