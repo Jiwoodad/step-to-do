@@ -16,8 +16,6 @@ class UserService:
         self.hash_password = hash_password
 
     def create_user(self, email: str, password: str, name: str) -> User:
-        self.user_repo.validate_email_format(email)
-
         _user = None
         try:
             _user = self.user_repo.find_by_email(email)

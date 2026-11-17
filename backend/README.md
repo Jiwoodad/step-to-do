@@ -209,7 +209,6 @@ FastAPI 기본 형식(`{"detail": ...}`)을 쓴다. 전체 표는 [API.md §8](.
 API.md와 아직 맞지 않는 부분이다. 해결하면 이 목록에서 지운다.
 
 - [ ] 중복 이메일: `UserService.create_user`가 `422`를 던진다 → `409` + `{"detail": "이미 가입된 이메일입니다."}`
-- [ ] 이메일 정규화: 앞뒤 공백 제거·소문자 변환 없이 검사·저장한다
 - [ ] 사용자 id: `User.id`는 `int`로 선언돼 있는데 서비스는 ULID 문자열을 넣는다. ERD와 API는 정수다
 - [ ] ERD 이미지(`assets/db_erd.png`)에 사용자 `created_at` 컬럼 반영 (모델·마이그레이션에는 추가됨)
 - [ ] 비밀번호 해시: `utils/crypto.py`가 bcrypt를 쓴다. bcrypt는 72바이트까지만 써서 한글 64자(최대 192바이트)가 잘린다 → argon2(이미 의존성에 있는 `pwdlib[argon2]`)를 검토한다

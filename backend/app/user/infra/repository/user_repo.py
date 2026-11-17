@@ -1,5 +1,3 @@
-from email_validator import EmailNotValidError, validate_email
-from fastapi.exceptions import RequestValidationError
 from fastapi import HTTPException
 
 from database import SessionLocal
@@ -35,23 +33,6 @@ class UserRepository(IUserRepository):
             raise HTTPException(status_code=422)
 
         return UserVO(**row_to_dict(user))
-
-    def validate_email_format(self, email: str):
-        try:
-            # 형식·길이(254자)만 검사. DNS·MX 조회는 하지 않는다
-            validate_email(email.strip(), check_deliverability=False)
-        except EmailNotValidError as e:
-            # 스키마 검증 실패와 같은 경로로 보내 `loc: ["body", "email"]` 형식을 맞춘다
-            raise RequestValidationError(
-                [
-                    {
-                        "type": "value_error",
-                        "loc": ("body", "email"),
-                        "msg": f"value is not a valid email address: {e}",
-                        "input": email,
-                    }
-                ]
-            )
 
     def find_by_id(self, id: str):
         with SessionLocal() as db:
